@@ -1,86 +1,163 @@
-# P2P Smart Grid Simulator
+# ⚡ P2P Smart Grid Simulator
 
-⚡ An interactive Streamlit-based simulator for peer-to-peer (P2P) energy trading in a smart grid network using AI algorithms.
+An interactive demonstration of peer-to-peer energy trading in smart grids using AI algorithms.
 
----
+## 🏗️ Project Structure
 
-## Project Description
+The project has been organized into a modular structure for better maintainability:
 
-This project simulates a decentralized smart grid where houses act as prosumers (both producers and consumers) or consumers of energy. The simulator models energy trading between houses using advanced algorithms such as A* pathfinding for optimal energy flow and a Continuous Double Auction mechanism for fair market pricing.
-
-The application provides a rich interactive visualization of the network topology, energy trades, and live market metrics, allowing users to explore different network configurations and trading dynamics.
-
----
-
-## Features
-
-- Configurable network topologies: ring, mesh, and star
-- Houses with dynamic energy surplus or deficit and bid prices
-- A* pathfinding algorithm to find optimal energy flow paths considering line capacities and congestion
-- Continuous Double Auction mechanism to match buyers and sellers fairly
-- Real-time visualization of the network, trades, and congestion using Plotly
-- Interactive controls to initialize the network, simulate trading steps, and add houses manually
-- Live metrics dashboard showing trades, prices, efficiency, and congestion
-
----
-
-## Installation
-
-1. Clone the repository or download the source code.
-
-2. Install the required Python packages. It is recommended to use a virtual environment.
-
-```bash
-pip install streamlit numpy pandas networkx plotly
+```
+AIML lab el/
+├── main.py                 # Main Streamlit application entry point
+├── requirements.txt        # Python dependencies
+├── README.md              # This file
+├── models/                # Data models and structures
+│   ├── __init__.py
+│   └── data_models.py     # House, Connection, Trade classes
+├── algorithms/            # AI algorithms implementation
+│   ├── __init__.py
+│   ├── pathfinding.py     # A* pathfinding algorithm
+│   └── auction.py         # Double auction mechanism
+├── simulation/            # Core simulation logic
+│   ├── __init__.py
+│   └── simulator.py       # Main SmartGridSimulator class
+└── visualization/         # Plotting and visualization
+    ├── __init__.py
+    └── plots.py           # Network and metrics visualization
 ```
 
----
+## 🚀 Features
 
-## Usage
+### Core Functionality
+- **Interactive Network Visualization**: Real-time display of houses, connections, and energy flow
+- **Multiple Network Topologies**: Ring, Mesh, and Star network configurations
+- **Dynamic House Management**: Add houses manually with custom parameters
+- **Real-time Metrics**: Live tracking of trades, prices, efficiency, and congestion
 
-Run the Streamlit app with the following command:
+### AI Algorithms
+- **A* Pathfinding**: Optimal energy flow path discovery considering capacity constraints
+- **Double Auction**: Fair price discovery and trade matching between buyers and sellers
+- **Priority Queues**: Efficient management of bid/ask ordering and trade execution
 
-```bash
-streamlit run main.py
-```
+### Network Topologies
+- **Ring**: Circular connections with diagonal redundancy
+- **Mesh**: Fully connected network within distance constraints
+- **Star**: Centralized hub with edge connections
 
-This will open the app in your default web browser.
+## 🛠️ Installation
 
----
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd "AIML lab el"
+   ```
 
-## How to Use the Simulator
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-- Use the sidebar controls to configure the number of houses and network topology.
-- Click **Initialize Network** to create the network.
-- Use the **Step** button to simulate one trading step or enable **Auto Run** for continuous simulation.
-- Add houses manually by specifying their position, energy surplus/deficit, bid price, and type.
-- Visualize the network with color-coded houses and connections indicating energy status and congestion.
-- View live metrics such as total trades, average price, market efficiency, and network congestion.
-- Explore recent trades and house statuses in the main panel.
+3. **Run the application**:
+   ```bash
+   streamlit run main.py
+   ```
 
----
+## 📊 Usage
 
-## Key Components and Algorithms
+### Getting Started
+1. Open the application in your browser
+2. Use the sidebar to configure the network:
+   - Set number of houses (4-15)
+   - Choose network topology (ring/mesh/star)
+   - Click "Initialize Network"
+
+### Simulation Controls
+- **Step**: Execute one simulation step manually
+- **Auto Run**: Automatically run simulation steps
+- **Reset**: Clear simulation and start fresh
+
+### Adding Houses
+- Use the "Add House Manually" section in the sidebar
+- Set position (X, Y coordinates)
+- Define energy balance (positive = surplus, negative = deficit)
+- Set bid price and house type
+
+### Visualization Features
+- **Network View**: Interactive plot showing houses and connections
+- **Trade Paths**: Purple dashed lines show active energy trades
+- **Connection Status**: Color-coded lines based on utilization
+- **Live Metrics**: Real-time statistics and performance indicators
+
+## 🧠 Algorithm Details
 
 ### A* Pathfinding
+- **Purpose**: Find optimal energy flow paths between houses
+- **Heuristic**: Euclidean distance between nodes
+- **Constraints**: Line capacity and network congestion
+- **Optimization**: Minimizes path cost while avoiding overloaded connections
 
-The simulator uses the A* algorithm to find optimal paths for energy flow between buyers and sellers. It considers:
+### Double Auction
+- **Purpose**: Match energy buyers with sellers at fair prices
+- **Mechanism**: 
+  - Buyers sorted by highest bid price
+  - Sellers sorted by lowest ask price (80% of bid)
+  - Trades executed when buyer bid ≥ seller ask
+- **Price Discovery**: Average of buyer bid and seller ask
 
-- Euclidean distance as the heuristic
-- Line capacity constraints to avoid congested connections
-- Network congestion to optimize routing
+## 📈 Metrics Explained
 
-### Continuous Double Auction
+- **Total Trades**: Number of successful energy transactions
+- **Average Price**: Mean price per kWh across all trades
+- **Market Efficiency**: Percentage of total supply/demand satisfied
+- **Network Congestion**: Average utilization of power lines
+- **Price Standard Deviation**: Price volatility indicator
 
-Energy trading is facilitated by a Continuous Double Auction mechanism that:
+## 🔧 Customization
 
-- Sorts buyers by highest bid price and sellers by lowest ask price
-- Matches trades where buyer bid meets or exceeds seller ask
-- Determines fair trade prices and quantities
-- Updates energy balances of houses accordingly
+### Adding New Algorithms
+1. Create new file in `algorithms/` directory
+2. Implement algorithm class with required interface
+3. Import and integrate in `simulation/simulator.py`
 
----
+### Extending Data Models
+1. Add new classes to `models/data_models.py`
+2. Update visualization functions in `visualization/plots.py`
+3. Modify simulator to handle new data types
 
-## License
+### New Network Topologies
+1. Add topology method in `simulation/simulator.py`
+2. Update network type selection in `main.py`
+3. Test with different house configurations
 
-This project is provided as-is under the MIT License. Feel free to use and modify it for your own purposes.
+## 🐛 Troubleshooting
+
+### Common Issues
+- **Import Errors**: Ensure all dependencies are installed via `requirements.txt`
+- **Visualization Issues**: Check that plotly is properly installed
+- **Performance**: Reduce number of houses for better performance on slower machines
+
+### Dependencies
+- **Streamlit**: Web framework for the interactive interface
+- **NumPy**: Numerical computations and random number generation
+- **Pandas**: Data manipulation and display
+- **NetworkX**: Graph theory and network analysis
+- **Plotly**: Interactive visualizations
+
+## 📝 License
+
+This project is for educational and research purposes.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## 📚 References
+
+- A* Pathfinding Algorithm
+- Double Auction Mechanisms
+- Smart Grid Energy Trading
+- Network Topology Design
