@@ -6,6 +6,8 @@ Streamlit-based interactive demo for energy trading with AI algorithms
 import streamlit as st
 import pandas as pd
 import time
+import copy
+import io
 
 # Handle orjson import issues
 try:
@@ -39,6 +41,7 @@ def main():
         st.session_state.metrics_history = []
         st.session_state.is_running = False
         st.session_state.auto_step = False
+        st.session_state.sim_history = []  # For undo feature
     
     # Sidebar controls
     with st.sidebar:
@@ -47,7 +50,7 @@ def main():
         # Network configuration
         st.subheader("Network Configuration")
         num_houses = st.slider("Number of Houses", 4, 15, 8)
-        network_type = st.selectbox("Network Topology", ["ring", "mesh", "star"])
+        network_type = st.selectbox("Network Topology", ["ring", "mesh", "star", "random", "grid"])
         
         # Ensure network_type is not None
         if network_type is None:
@@ -56,6 +59,7 @@ def main():
         if st.button("🔄 Initialize Network"):
             st.session_state.simulator.initialize_network(num_houses, network_type)
             st.session_state.metrics_history = []
+            st.session_state.initial_houses = copy.deepcopy(st.session_state.simulator.houses)
             st.rerun()
         
         st.divider()
@@ -66,6 +70,11 @@ def main():
         col1, col2 = st.columns(2)
         with col1:
             if st.button("▶️ Step"):
+                # Store current state for undo
+                st.session_state.sim_history.append({
+                    'simulator': copy.deepcopy(st.session_state.simulator),
+                    'metrics_history': copy.deepcopy(st.session_state.metrics_history)
+                })
                 result = st.session_state.simulator.simulate_step()
                 st.session_state.metrics_history.append(result["metrics"])
                 st.rerun()
@@ -74,7 +83,19 @@ def main():
             if st.button("⏹️ Reset"):
                 st.session_state.simulator.initialize_network(num_houses, network_type)
                 st.session_state.metrics_history = []
+                st.session_state.initial_houses = copy.deepcopy(st.session_state.simulator.houses)
+                st.session_state.sim_history = []
                 st.rerun()
+        
+        # Undo button
+        if st.button("↩️ Undo Last Step"):
+            if st.session_state.sim_history:
+                last_state = st.session_state.sim_history.pop()
+                st.session_state.simulator = last_state['simulator']
+                st.session_state.metrics_history = last_state['metrics_history']
+                st.rerun()
+            else:
+                st.warning("No previous step to undo.")
         
         # Auto-run toggle
         auto_run = st.checkbox("🔄 Auto Run", value=st.session_state.auto_step)
@@ -134,18 +155,55 @@ def main():
         except Exception as e:
             st.error(f"Error displaying network visualization: {str(e)}")
             st.info("Please try refreshing the page or reinstalling dependencies.")
-        
-        # Legend
-        st.markdown("""
-        **Legend:**
-        - 🟢 Green Houses: Energy Surplus (Sellers)
-        - 🔴 Red Houses: Energy Deficit (Buyers)  
-        - 🟢 Green Lines: Low Usage (<50%)
-        - 🟠 Orange Lines: Medium Usage (50-80%)
-        - 🔴 Red Lines: High Usage (>80%)
-        - 🟣 Purple Dashed: Active Trade Paths
-        """)
-    
+
+    # House state comparison tables (moved for better visibility)
+    st.markdown("### House State Comparison")
+    st.markdown(
+        "Below you can compare the <b>initial</b> and <b>current</b> state of all houses in the network after each simulation step.",
+        unsafe_allow_html=True
+    )
+    col_init, col_evol = st.columns(2)
+    with col_init:
+        st.markdown("#### 🟦 Initial House State")
+        if "initial_houses" in st.session_state:
+            init_houses_df = pd.DataFrame([
+                {
+                    "ID": h.id,
+                    "Energy": f"{h.energy:.1f}",
+                    "Bid": f"${h.bid_price:.2f}",
+                    "Type": h.house_type,
+                    "Status": "Seller" if h.is_seller else "Buyer" if h.is_buyer else "Neutral"
+                }
+                for h in st.session_state.initial_houses.values()
+            ])
+            st.dataframe(init_houses_df, use_container_width=True)
+        else:
+            st.info("No initial state available. Please initialize the network.")
+    with col_evol:
+        st.markdown("#### 🟩 Current House State")
+        houses_df = pd.DataFrame([
+            {
+                "ID": h.id,
+                "Energy": f"{h.energy:.1f}",
+                "Bid": f"${h.bid_price:.2f}",
+                "Type": h.house_type,
+                "Status": "Seller" if h.is_seller else "Buyer" if h.is_buyer else "Neutral"
+            }
+            for h in network_data["houses"].values()
+        ])
+        st.dataframe(houses_df, use_container_width=True)
+
+    # Legend (moved here after the tables)
+    st.markdown("""
+    **Legend:**
+    - 🟢 Green Houses: Energy Surplus (Sellers)
+    - 🔴 Red Houses: Energy Deficit (Buyers)  
+    - 🟢 Green Lines: Low Usage (<50%)
+    - 🟠 Orange Lines: Medium Usage (50-80%)
+    - 🔴 Red Lines: High Usage (>80%)
+    - 🟣 Purple Dashed: Active Trade Paths
+    """)
+
     with col2:
         # Current metrics
         st.subheader("📊 Live Metrics")
@@ -175,19 +233,28 @@ def main():
         else:
             st.info("No trades yet. Run a simulation step!")
         
-        # House status
-        st.subheader("🏠 House Status")
-        houses_df = pd.DataFrame([
-            {
-                "ID": h.id,
-                "Energy": f"{h.energy:.1f}",
-                "Bid": f"${h.bid_price:.2f}",
-                "Type": h.house_type,
-                "Status": "Seller" if h.is_seller else "Buyer" if h.is_buyer else "Neutral"
-            }
-            for h in network_data["houses"].values()
-        ])
-        st.dataframe(houses_df, use_container_width=True)
+        # Export buttons
+        st.markdown("**Export Data**")
+        # Export current house state
+        csv_buffer = io.StringIO()
+        houses_df.to_csv(csv_buffer, index=False)
+        st.download_button(
+            label="Download Current House State (CSV)",
+            data=csv_buffer.getvalue(),
+            file_name="current_house_state.csv",
+            mime="text/csv"
+        )
+        # Export metrics history
+        if st.session_state.metrics_history:
+            metrics_df = pd.DataFrame(st.session_state.metrics_history)
+            csv_buffer2 = io.StringIO()
+            metrics_df.to_csv(csv_buffer2, index=False)
+            st.download_button(
+                label="Download Metrics History (CSV)",
+                data=csv_buffer2.getvalue(),
+                file_name="metrics_history.csv",
+                mime="text/csv"
+            )
     
     # Metrics history
     if st.session_state.metrics_history:
@@ -197,6 +264,10 @@ def main():
             st.plotly_chart(metrics_fig, use_container_width=True)
         except Exception as e:
             st.error(f"Error displaying metrics: {str(e)}")
+        # Metrics table
+        metrics_df = pd.DataFrame(st.session_state.metrics_history)
+        st.markdown("**Metrics Table (per step):**")
+        st.dataframe(metrics_df, use_container_width=True)
     
     # Algorithm information
     st.subheader("🧠 Algorithms in Action")

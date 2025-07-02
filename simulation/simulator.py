@@ -58,6 +58,10 @@ class SmartGridSimulator:
             self._create_mesh_topology(num_houses)
         elif network_type == "star":
             self._create_star_topology(num_houses)
+        elif network_type == "random":
+            self._create_random_topology(num_houses)
+        elif network_type == "grid":
+            self._create_grid_topology(num_houses)
         
         # Initialize algorithms
         self.pathfinder = AStarPathfinder(self.graph, self.houses, self.connections)
@@ -98,6 +102,30 @@ class SmartGridSimulator:
                 j = np.random.randint(1, num_houses)
                 if i != j:
                     self._add_connection(i, j, np.random.uniform(60, 100))
+    
+    def _create_random_topology(self, num_houses: int, prob: float = 0.3):
+        for i in range(num_houses):
+            for j in range(i + 1, num_houses):
+                if np.random.random() < prob:
+                    self._add_connection(i, j, np.random.uniform(60, 120))
+
+    def _create_grid_topology(self, num_houses: int):
+        # Find grid size (as square as possible)
+        grid_size = int(np.ceil(np.sqrt(num_houses)))
+        positions = {}
+        idx = 0
+        for x in range(grid_size):
+            for y in range(grid_size):
+                if idx < num_houses:
+                    positions[idx] = (x, y)
+                    idx += 1
+        # Connect neighbors
+        for i, (x, y) in positions.items():
+            for dx, dy in [(1, 0), (0, 1)]:  # Right and Down
+                nx, ny = x + dx, y + dy
+                for j, (xx, yy) in positions.items():
+                    if (xx, yy) == (nx, ny):
+                        self._add_connection(i, j, np.random.uniform(80, 120))
     
     def _add_connection(self, house1: int, house2: int, capacity: float):
         """Add a connection between two houses"""
