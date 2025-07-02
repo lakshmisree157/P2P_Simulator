@@ -8,6 +8,11 @@ import pandas as pd
 import time
 import copy
 import io
+import datetime
+from algorithms.ai_price_predictor import (
+    append_training_data, train_and_evaluate_model, predict_price, export_training_data, reset_training_data,
+    generate_initial_training_data
+)
 
 # Handle orjson import issues
 try:
@@ -42,7 +47,69 @@ def main():
         st.session_state.is_running = False
         st.session_state.auto_step = False
         st.session_state.sim_history = []  # For undo feature
+    if 'ai_training_data' not in st.session_state or not st.session_state['ai_training_data']:
+        st.session_state['ai_training_data'] = generate_initial_training_data(50)
+    if 'ai_model' not in st.session_state:
+        st.session_state['ai_model'] = None
+    if 'ai_r2' not in st.session_state:
+        st.session_state['ai_r2'] = None
+    if 'ai_predicted_price' not in st.session_state:
+        st.session_state['ai_predicted_price'] = None
+    # Train model on initial data if not already trained
+    if st.session_state['ai_model'] is None and len(st.session_state['ai_training_data']) >= 10:
+        model, r2 = train_and_evaluate_model(st.session_state['ai_training_data'])
+        st.session_state['ai_model'] = model
+        st.session_state['ai_r2'] = r2
+        # Predict for next round
+        time_of_day = (0) % 24
+        total_generation = st.session_state['ai_training_data'][-1]['total_generation']
+        total_demand = st.session_state['ai_training_data'][-1]['total_demand']
+        next_time_of_day = (time_of_day + 1) % 24
+        pred_price = predict_price(model, next_time_of_day, total_generation, total_demand)
+        st.session_state['ai_predicted_price'] = pred_price
     
+    # --- AI PATCHED SIMULATION STEP AND HELPERS ---
+    def get_time_of_day():
+        # Use simulation step as hour (0-23) for demo, or use real time if desired
+        return (st.session_state.simulator.step_count - 1) % 24
+    def get_total_generation_and_demand():
+        houses = st.session_state.simulator.houses.values()
+        total_generation = sum(h.energy for h in houses if h.energy > 0)
+        total_demand = sum(abs(h.energy) for h in houses if h.energy < 0)
+        return total_generation, total_demand
+    def get_clearing_price():
+        # Use avg_price from latest metrics
+        if st.session_state.metrics_history:
+            return st.session_state.metrics_history[-1]['avg_price']
+        return 0.0
+    def patched_simulate_step():
+        result = st.session_state.simulator.simulate_step()
+        st.session_state.metrics_history.append(result["metrics"])
+        # Collect AI data
+        time_of_day = get_time_of_day()
+        total_generation, total_demand = get_total_generation_and_demand()
+        clearing_price = get_clearing_price()
+        st.session_state['ai_training_data'] = append_training_data(
+            st.session_state['ai_training_data'],
+            time_of_day, total_generation, total_demand, clearing_price
+        )
+        # Train model if enough data
+        if len(st.session_state['ai_training_data']) >= 10:
+            model, r2 = train_and_evaluate_model(st.session_state['ai_training_data'])
+            st.session_state['ai_model'] = model
+            st.session_state['ai_r2'] = r2
+            # Predict for next round
+            next_time_of_day = (time_of_day + 1) % 24
+            next_total_generation, next_total_demand = get_total_generation_and_demand()
+            pred_price = predict_price(model, next_time_of_day, next_total_generation, next_total_demand)
+            st.session_state['ai_predicted_price'] = pred_price
+        else:
+            st.session_state['ai_model'] = None
+            st.session_state['ai_r2'] = None
+            st.session_state['ai_predicted_price'] = None
+        st.rerun()
+    # --- END PATCHED ---
+
     # Sidebar controls
     with st.sidebar:
         st.header("🎛️ Control Panel")
@@ -75,9 +142,7 @@ def main():
                     'simulator': copy.deepcopy(st.session_state.simulator),
                     'metrics_history': copy.deepcopy(st.session_state.metrics_history)
                 })
-                result = st.session_state.simulator.simulate_step()
-                st.session_state.metrics_history.append(result["metrics"])
-                st.rerun()
+                patched_simulate_step()
         
         with col2:
             if st.button("⏹️ Reset"):
@@ -104,10 +169,8 @@ def main():
             st.rerun()
         
         if auto_run:
-            time.sleep(2)  # Wait 2 seconds between steps
-            result = st.session_state.simulator.simulate_step()
-            st.session_state.metrics_history.append(result["metrics"])
-            st.rerun()
+            time.sleep(2)
+            patched_simulate_step()
         
         st.divider()
         
@@ -132,6 +195,32 @@ def main():
                 new_id = st.session_state.simulator.add_house_manually(x_pos, y_pos, energy, bid_price, house_type)
                 st.success(f"Added House {new_id}!")
                 st.rerun()
+        
+        st.divider()
+        st.header('🤖 AI Price Predictor')
+        # Reset button
+        if st.button('Reset Model'):
+            st.session_state['ai_training_data'] = generate_initial_training_data(50)
+            st.session_state['ai_model'] = None
+            st.session_state['ai_r2'] = None
+            st.session_state['ai_predicted_price'] = None
+            st.success('AI model and training data reset to 50 initial rows.')
+            st.rerun()
+        # Download button
+        if st.session_state['ai_training_data']:
+            csv = export_training_data(st.session_state['ai_training_data'])
+            st.download_button('Download Training Data (CSV)', data=csv, file_name='ai_training_data.csv', mime='text/csv')
+            st.caption('You can share this CSV with others or use it to initialize another simulator instance.')
+        # Model status
+        st.markdown(f"**Training batch size:** {len(st.session_state['ai_training_data'])}")
+        if st.session_state['ai_model'] is None or len(st.session_state['ai_training_data']) < 10:
+            st.info(f"Model not trained. ({len(st.session_state['ai_training_data'])}/10 data points)")
+        else:
+            st.success(f"Model trained. R² score: {st.session_state['ai_r2']:.3f}")
+            if st.session_state['ai_r2'] > 0.8 and st.session_state['ai_predicted_price'] is not None:
+                st.markdown(f"**Predicted Price (next round):** ${st.session_state['ai_predicted_price']:.2f}")
+            elif st.session_state['ai_r2'] <= 0.8:
+                st.warning('Model accuracy is too low for prediction (R² ≤ 0.8).')
     
     # Main content area
     if not st.session_state.simulator.houses:
