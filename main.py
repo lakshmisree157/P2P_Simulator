@@ -13,6 +13,7 @@ from algorithms.ai_price_predictor import (
     append_training_data, train_and_evaluate_model, predict_price, export_training_data, reset_training_data,
     generate_initial_training_data
 )
+from algorithms.fuzzy_price_discovery import FuzzyPriceDiscovery
 
 # Handle orjson import issues
 try:
@@ -221,6 +222,20 @@ def main():
                 st.markdown(f"**Predicted Price (next round):** ${st.session_state['ai_predicted_price']:.2f}")
             elif st.session_state['ai_r2'] <= 0.8:
                 st.warning('Model accuracy is too low for prediction (R² ≤ 0.8).')
+        
+        st.divider()
+        st.header('🌫️ Fuzzy Logic Price Discovery (Demo)')
+        fuzzy = FuzzyPriceDiscovery()
+        # User controls for demo
+        fuzzy_time = st.slider('Time of Day (hour)', 0, 23, 12)
+        fuzzy_weather = st.slider('Weather Factor (0=bad, 1=good)', 0.0, 1.0, 0.7, step=0.01)
+        houses = st.session_state.simulator.houses if hasattr(st.session_state.simulator, 'houses') else {}
+        fuzzy_price = fuzzy.calculate_fuzzy_price(houses, fuzzy_time, fuzzy_weather)
+        st.metric('Fuzzy Price', f'${fuzzy_price:.2f}')
+        # Show fuzzy analysis details
+        with st.expander('Show Fuzzy Analysis Details'):
+            analysis = fuzzy.get_fuzzy_analysis(houses, fuzzy_time, fuzzy_weather)
+            st.write(analysis)
     
     # Main content area
     if not st.session_state.simulator.houses:
